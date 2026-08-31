@@ -1,0 +1,6 @@
+@LosSantosAutoMarket.Api_HostAddress = http://localhost:5147
+
+GET {{LosSantosAutoMarket.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
