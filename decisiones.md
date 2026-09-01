@@ -317,3 +317,28 @@ Se utilizó principalmente para:
 - documentar los pasos realizados.
 
 Las configuraciones propuestas fueron ejecutadas y verificadas manualmente antes de incorporarlas al proyecto.
+
+## TP3 — Planificación y trazabilidad
+
+### Duración del sprint
+Se definió un sprint de 1 semana porque el ritmo de trabajo de la materia está organizado en entregas semanales. Esto permite mantener un alcance acotado y revisar el avance con frecuencia.
+
+### Límite de trabajo en progreso
+Se configuró un límite WIP de 2 en la columna In Progress. Como el proyecto es individual, se utilizó la regla de cantidad de personas + 1. Esto permite trabajar sobre una tarea y disponer de un margen para avanzar en otra si la primera queda bloqueada.
+
+### Diagnóstico de una historia mal escrita
+La historia "Como desarrollador quiero crear la tabla usuarios para guardar los datos" está mal planteada porque describe una tarea técnica y no un incremento de valor observable por un usuario.
+
+Una mejor versión sería: "Como usuario quiero poder registrarme para acceder a funcionalidades personalizadas de la aplicación".
+
+### Problemas encontrados y soluciones
+Durante la configuración se detectó que GitHub CLI no estaba instalado, por lo que el práctico se realizó mediante la interfaz web de GitHub.
+
+También se tuvo cuidado al crear la jerarquía de issues para que la historia quedara como sub-issue de la épica y las tareas como sub-issues de la historia.
+
+Finalmente, se verificó la trazabilidad utilizando `Closes #8` en la descripción del Pull Request. Al mergear el PR, GitHub cerró automáticamente la tarea y el workflow del Project la movió a Done.
+
+### Uso de IA
+Se utilizó ChatGPT como asistencia para interpretar la consigna, organizar los pasos del práctico, redactar descripciones de issues y revisar la configuración de GitHub Projects.
+
+Cada resultado fue verificado manualmente observando el comportamiento real del repositorio, los issues, el tablero, los workflows y el Pull Request.
