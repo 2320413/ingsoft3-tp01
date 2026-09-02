@@ -338,6 +338,53 @@ También se tuvo cuidado al crear la jerarquía de issues para que la historia q
 
 Finalmente, se verificó la trazabilidad utilizando `Closes #8` en la descripción del Pull Request. Al mergear el PR, GitHub cerró automáticamente la tarea y el workflow del Project la movió a Done.
 
+## TP4 — CI: Pipelines as Code
+
+### Estructura del pipeline
+
+El pipeline se dividió en dos jobs independientes: `build-backend` y `build-frontend`.
+
+Se eligió esta estructura porque la aplicación tiene dos imágenes Docker diferentes, una para el backend y otra para el frontend. Los jobs pueden ejecutarse en paralelo porque ninguno depende del resultado del otro, lo que permite verificar ambas imágenes al mismo tiempo.
+
+### Cache de capas
+
+El pipeline utiliza el cache de GitHub Actions para reutilizar capas de Docker entre ejecuciones.
+
+Se configuraron scopes separados:
+
+- `scope=backend`
+- `scope=frontend`
+
+Esto evita que ambos builds utilicen el mismo espacio de cache y se sobrescriban entre sí.
+
+En una segunda ejecución del mismo Pull Request se comprobó la reutilización de capas mediante la aparición de `CACHED` en los logs.
+
+El cache es solamente una optimización. Si desaparece, el pipeline debe continuar funcionando correctamente, aunque tarde más porque deberá reconstruir las capas desde cero.
+
+### Uso de Dockerfiles
+
+El pipeline construye las imágenes utilizando los mismos Dockerfiles creados en el TP2.
+
+Esto evita mantener dos definiciones diferentes del proceso de compilación. Si el workflow compilara directamente con comandos de .NET y Node, mientras que producción utilizara los Dockerfiles, ambos procesos podrían diferir con el tiempo.
+
+De esta manera, el pipeline verifica exactamente el mismo proceso de construcción que se utilizará posteriormente para desplegar la aplicación.
+
+### Problemas encontrados y soluciones
+
+Se realizaron dos ejecuciones del pipeline para comprobar el funcionamiento del cache. En la segunda ejecución se verificó la aparición de `CACHED` tanto en el backend como en el frontend.
+
+También se configuraron `build-backend` y `build-frontend` como status checks obligatorios de la rama `main`.
+
+Para comprobar el funcionamiento del gate se introdujo intencionalmente un error de compilación en el backend mediante `using NoExiste;`. El job `build-backend` falló y GitHub bloqueó el merge del Pull Request. Luego se corrigió el error, el pipeline volvió a ejecutarse y ambos checks quedaron en verde.
+
+Además, se comprobó la opción `Require branches to be up to date before merging` manteniendo un segundo Pull Request abierto. Después de modificar `main`, GitHub exigió actualizar esa rama y volver a ejecutar los checks antes de habilitar el merge.
+
+### Uso de IA
+
+Se utilizó ChatGPT como asistencia para interpretar la consigna, configurar el workflow de GitHub Actions, organizar los pasos de prueba del gate y redactar la documentación del práctico.
+
+Las configuraciones propuestas fueron verificadas mediante ejecuciones reales de GitHub Actions, revisando los logs del cache, los status checks obligatorios y el comportamiento de las protecciones de la rama `main`.
+
 ### Uso de IA
 Se utilizó ChatGPT como asistencia para interpretar la consigna, organizar los pasos del práctico, redactar descripciones de issues y revisar la configuración de GitHub Projects.
 
