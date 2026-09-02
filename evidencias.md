@@ -60,9 +60,7 @@ db:5432
 
 La aplicación pudo cargar correctamente los vehículos desde PostgreSQL a través del backend.
 
-```text
-img/tp2-compose-funcionando.png
-```
+![Aplicación ejecutándose con Docker Compose](img/tp2-compose-funcionando.png)
 
 ---
 
@@ -80,9 +78,7 @@ Esto se implementó utilizando `pg_isready` en el healthcheck del servicio `db`.
 
 **Evidencia sugerida:**
 
-```text
-img/tp2-db-healthy.png
-```
+![Healthcheck de PostgreSQL](img/tp2-db-healthy.png)
 
 ---
 
@@ -112,9 +108,7 @@ al inicio del backend.
 
 **Evidencia sugerida:**
 
-```text
-img/tp2-migraciones.png
-```
+![Migraciones automáticas de Entity Framework Core](img/tp2-migraciones.png)
 
 ---
 
@@ -170,9 +164,7 @@ Volume ingsoft3-tp01_postgres_data Removed
 
 **Evidencia:**
 
-```text
-img/tp2-down-v.png
-```
+![Eliminación del volumen de PostgreSQL](img/tp2-down-v.png)
 
 Luego se ejecutó nuevamente:
 
@@ -206,9 +198,7 @@ Esto demostró que una instalación limpia puede reconstruir automáticamente la
 
 **Evidencia:**
 
-```text
-img/tp2-app-desde-cero.png
-```
+![Aplicación funcionando desde una base limpia](img/tp2-app-desde-cero.png)
 
 ---
 
@@ -274,9 +264,7 @@ Esto representa una reducción aproximada del 58%.
 
 **Evidencia:**
 
-```text
-img/tp2-tamanos-imagenes.png
-```
+![Comparación de tamaños de las imágenes Docker](img/tp2-tamanos-imagenes.png)
 
 ---
 
@@ -298,11 +286,7 @@ ghcr.io/2320413/los-santos-auto-market-frontend:v0.1.0
 
 Ambas imágenes fueron configuradas como públicas.
 
-**Evidencia sugerida:**
-
-```text
-img/tp2-ghcr-packages.png
-```
+![Imágenes publicadas en GitHub Container Registry](img/tp2-ghcr-packages.png)
 
 ---
 
@@ -332,9 +316,7 @@ http://localhost:3000
 
 **Evidencia:**
 
-```text
-img/tp2-registry-funcionando.png
-```
+![Aplicación ejecutándose desde imágenes públicas de GHCR](img/tp2-registry-funcionando.png)
 
 ---
 
