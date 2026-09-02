@@ -2,7 +2,7 @@
 
 ## 1. Por qué Git no pudo resolver el conflicto solo — y qué habría tenido que pasar para que nunca apareciera
 
-Git no pudo resolver el conflicto automáticamente porque dos ramas distintas modificaban la misma línea del archivo `README.md` de forma diferente.
+Git no pudo resolver el conflicto automáticamente porque dos ramas distintas modificaban la misma línea del archivo `README.md` de forma diferente. El conflicto no habría aparecido si ambas ramas hubieran modificado líneas distintas, o si una de las ramas hubiera incorporado previamente los cambios de la otra antes de modificar esa misma línea.
 
 ## 2. Qué problemas encontraste y cómo los solucionaste. Los tropiezos bien contados valen más que un camino perfecto: son los que demuestran que entendiste
 
@@ -16,18 +16,23 @@ Utilicé ChatGPT como asistencia durante la realización del TP, principalmente 
 
 Verifiqué las indicaciones comparándolas con la guía oficial del TP y comprobando en GitHub y en la terminal que cada paso tuviera el resultado esperado.
 
-# Decisiones - TP1 
-
 ## TP2 — Contenedores
 
 ### Elección de la aplicación
 
 Para el trabajo práctico se utilizó la aplicación **Los Santos Auto Market**, desarrollada durante la cursada.
 
-La aplicación funciona como un catálogo de vehículos, permitiendo consultar autos disponibles en distintas concesionarias, realizar búsquedas, aplicar filtros, visualizar detalles de cada vehículo y contactar al vendedor.
+Se eligió esta aplicación porque cumple con los criterios definidos para la app del semestre:
 
-Se eligió esta aplicación porque permite trabajar durante el resto de la materia con una arquitectura completa compuesta por frontend, backend y base de datos.
+1. **Buildea y corre localmente:** la aplicación puede ejecutarse en la máquina de desarrollo con frontend, backend y base de datos funcionando.
 
+2. **Permite incorporar tests:** el backend y el frontend tienen lógica suficiente para agregar pruebas automáticas en los próximos trabajos prácticos.
+
+3. **El código es comprensible y modificable:** conozco la estructura de la aplicación y puedo realizar cambios tanto en el frontend como en el backend y la configuración de la base de datos.
+
+4. **Tiene un tamaño adecuado:** la aplicación tiene una complejidad suficiente para trabajar durante la materia sin ser innecesariamente grande. Incluye catálogo de vehículos, búsquedas, filtros, detalles y comunicación con el backend y la base de datos.
+
+Además, cumple con el requisito mínimo de tener **frontend, backend y base de datos**, utilizando React + Vite, ASP.NET Core 8 y PostgreSQL.
 ---
 
 ### Arquitectura utilizada
