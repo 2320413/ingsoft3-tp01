@@ -1,5 +1,7 @@
 # Ingeniería de Software III
 
+[![CI](https://github.com/2320413/ingsoft3-tp01/actions/workflows/ci.yml/badge.svg)](https://github.com/2320413/ingsoft3-tp01/actions/workflows/ci.yml)
+
 Repositorio utilizado para los trabajos prácticos de Ingeniería de Software III.
 
 ---
