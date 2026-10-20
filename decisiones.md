@@ -394,3 +394,153 @@ Las configuraciones propuestas fueron verificadas mediante ejecuciones reales de
 Se utilizó ChatGPT como asistencia para interpretar la consigna, organizar los pasos del práctico, redactar descripciones de issues y revisar la configuración de GitHub Projects.
 
 Cada resultado fue verificado manualmente observando el comportamiento real del repositorio, los issues, el tablero, los workflows y el Pull Request.
+
+## TP5 — Calidad automatizada: tests, coverage y quality gates
+
+### Lógica elegida para los tests
+
+En el backend se eligió testear la lógica de filtrado del catálogo de vehículos, ya que un error en esta parte afecta directamente los resultados que recibe el usuario al buscar vehículos.
+
+Se extrajo esta lógica a `VehiculoService` y se probaron reglas distintas: filtrado por categoría, filtrado por concesionaria, búsqueda por nombre, búsqueda por marca, precio mínimo, precio máximo y ordenamiento por precio.
+
+Los tests del backend se implementaron con xUnit. Se incluyó un test parametrizado mediante `[Theory]` y `[InlineData]`, casos de borde para los límites de precio y un test con mock del repositorio.
+
+En el frontend se extrajo lógica que antes estaba dentro de `App.jsx` a funciones independientes en `src/lib`. Se probaron la construcción de la URL de consulta de vehículos, el filtrado de favoritos, la comunicación con la API y posteriormente la generación de mensajes y URLs de WhatsApp.
+
+Los tests del frontend se implementaron con Vitest sin utilizar DOM, incluyendo `it.each`, casos de error y mocks mediante `vi.fn()`.
+
+### Refactor realizado para poder utilizar mocks
+
+En el backend la consulta a Entity Framework estaba realizada directamente desde el endpoint de `Program.cs`, lo que dificultaba probar la lógica de forma aislada.
+
+Se creó la interfaz `IVehiculoRepository`, su implementación `VehiculoRepository` y el servicio `VehiculoService`. El repositorio se inyecta mediante constructor y se registra con el contenedor de inyección de dependencias de ASP.NET Core.
+
+Esto permitió reemplazar el repositorio real por un `Mock<IVehiculoRepository>` durante los tests. En uno de los tests se verifica además que `ObtenerVehiculos()` sea invocado exactamente una vez.
+
+En el frontend se modificó `cargarVehiculos` para recibir el cliente HTTP desde afuera, utilizando `fetch` como valor por defecto. Durante los tests se reemplaza esta dependencia por `vi.fn()`, evitando realizar solicitudes reales y permitiendo verificar la URL con la que se invoca al cliente.
+
+### Coverage del backend
+
+Luego de medir inicialmente todo el proyecto, el backend mostraba aproximadamente 17.1% de line coverage. Ese número estaba fuertemente afectado por código de arranque, migraciones y clases de infraestructura que no corresponden a las reglas de negocio elegidas para los unit tests.
+
+Se excluyeron de la métrica:
+
+- `Program`: contiene principalmente arranque, configuración, endpoints y seed inicial.
+- `Data`: contiene el `AppDbContext`.
+- `Models`: contiene las clases de datos.
+- `Migrations`: código generado por Entity Framework Core.
+
+No se excluyó `VehiculoRepository`, ya que es código propio del proyecto.
+
+Con estas exclusiones el backend obtuvo:
+
+- **Line coverage: 83.33%**
+- **Branch coverage: 100%**
+
+Se definió un umbral obligatorio de **80% sobre line coverage**. Se eligió porque la cobertura real se encontraba en 83.33%, por lo que permite detectar una disminución relevante sin establecer un valor artificialmente superior al estado real del proyecto.
+
+Aunque el threshold del backend se aplica sobre líneas, también se publica y controla visualmente el branch coverage.
+
+### Coverage del frontend
+
+El frontend obtuvo, con la suite completa:
+
+- **Line coverage: 100%**
+- **Branch coverage: 100%**
+- **Function coverage: 100%**
+
+Se definieron thresholds de:
+
+- **80% line coverage**
+- **80% branch coverage**
+
+La medición incluye explícitamente `src/lib/**/*.js`. Esta decisión es importante porque hace que un archivo nuevo dentro de la carpeta de lógica entre en la medición incluso si todavía ningún test lo importa.
+
+No se incluyen `App.jsx`, `main.jsx`, CSS ni código puramente de presentación porque en este TP se decidió medir con unit tests la lógica extraída a `src/lib`. La interfaz completa se encuentra fuera del alcance de estos unit tests sin DOM.
+
+### Por qué un coverage alto no garantiza calidad
+
+Un porcentaje alto solamente indica qué código fue ejecutado durante los tests, no que los tests verifiquen correctamente su comportamiento.
+
+Por ejemplo, un test podría ejecutar `crearUrlWhatsApp("Hola")` y no realizar ningún `expect` sobre el resultado. Ese test recorrería las líneas de la función y aumentaría el coverage, pero una URL incorrecta podría seguir pasando inadvertida.
+
+Por eso se utilizaron asserts sobre resultados, casos de borde, errores y verificaciones de interacción con mocks, en lugar de buscar solamente aumentar el porcentaje.
+
+### Demostración del quality gate
+
+Para demostrar el funcionamiento del gate se creó el Pull Request #21.
+
+En el primer commit se agregó `contacto.js` con nueva lógica de contacto por WhatsApp sin agregar sus tests.
+
+La aplicación continuaba compilando correctamente y los **8 tests existentes seguían pasando**, pero el frontend quedó con:
+
+- **Line coverage: 65.21%**
+- **Branch coverage: 61.11%**
+
+Ambos valores quedaron por debajo del threshold de 80%, por lo que el required check `CI / build-frontend` quedó en rojo y GitHub bloqueó el merge.
+
+Corrida roja por threshold:
+
+https://github.com/2320413/ingsoft3-tp01/actions/runs/39373132248
+
+Pull Request con la secuencia rojo → tests → verde → merge:
+
+https://github.com/2320413/ingsoft3-tp01/pull/21
+
+Para corregirlo se agregó `contacto.test.js`, cubriendo la generación de mensajes de venta y compra, validación de vehículo inexistente, generación de URL, número alternativo y mensajes vacíos.
+
+Después de agregar esos tests, la suite del frontend pasó de 8 a 15 ejecuciones y volvió a obtener 100% de line y branch coverage. Los dos required checks quedaron verdes y el Pull Request pudo mergearse.
+
+Corrida verde con coverage y reportes:
+
+https://github.com/2320413/ingsoft3-tp01/actions/runs/39374809042
+
+### Segundo Pull Request bloqueado
+
+Se creó además el Pull Request #22, que agrega `financiacion.js` sin tests.
+
+Los **15 tests existentes pasan**, pero el nuevo archivo queda en 0% de cobertura. El resultado total es:
+
+- **Line coverage: 62.16%**
+- **Branch coverage: 60%**
+
+Por ese motivo `CI / build-frontend` permanece en rojo y el merge continúa bloqueado.
+
+Este Pull Request se deja intencionalmente abierto y sin corregir hasta la defensa para demostrar que el quality gate sigue vigente.
+
+https://github.com/2320413/ingsoft3-tp01/pull/22
+
+### Ejercicio del camino sin cubrir
+
+Al observar el primer reporte sin exclusiones se detectó una rama sin cubrir en `Program.cs`, en la línea que contiene:
+
+```csharp
+if (!await db.Vehiculos.AnyAsync())
+```
+
+Esta condición decide si se deben insertar los vehículos iniciales.
+
+Un caso concreto que recorrería el camino `false` sería iniciar la aplicación con una base de datos que ya contenga al menos un vehículo. En ese caso `AnyAsync()` devolvería `true`, la negación sería `false` y no se ejecutaría el seed.
+
+Se decidió no agregar un unit test para esta rama porque pertenece al código de inicialización y seed de `Program.cs`, que fue excluido de la métrica de unit tests. Su comportamiento corresponde más a una prueba de integración que a las reglas de negocio aisladas que se eligieron para este TP.
+
+### Problemas encontrados y soluciones
+
+Uno de los primeros problemas fue que el coverage bruto del backend era solamente 17.1%, aunque `VehiculoService` tenía 100% de cobertura. El motivo era que el reporte incluía `Program`, migraciones, DbContext y otras clases sin unit tests. Se solucionó definiendo exclusiones explícitas y utilizando las mismas exclusiones para el reporte y para el quality gate.
+
+También fue necesario separar la lógica que estaba directamente en `Program.cs` para poder probarla y mockear el acceso a datos. Esto se resolvió introduciendo `VehiculoService`, `IVehiculoRepository` y `VehiculoRepository`.
+
+En el frontend se extrajo lógica de `App.jsx` a `src/lib` para poder realizar unit tests sin DOM.
+
+Otro problema fue que al ejecutar inicialmente `npm test -- --run --coverage` en Windows Vitest continuaba en modo watch. Para realizar la medición local se utilizó directamente `npx vitest run --coverage`.
+
+También se comprobó que los paquetes `vitest` y `@vitest/coverage-v8` tuvieran exactamente la misma versión, `5.0.5`, para evitar incompatibilidades.
+
+Finalmente se extendieron los Dockerfiles con una etapa `test`, manteniendo las etapas finales de producción separadas, y se modificó el workflow existente para ejecutar los tests, publicar los reportes y aplicar los thresholds dentro de los mismos required checks utilizados desde el TP4.
+
+### Uso de Inteligencia Artificial
+
+Se utilizó ChatGPT como herramienta de apoyo durante el TP5 para interpretar la guía, organizar la implementación paso a paso, proponer la separación de lógica testeable, preparar ejemplos de unit tests, analizar los resultados de coverage, configurar Docker y GitHub Actions y redactar la documentación.
+
+Todas las propuestas fueron verificadas mediante ejecuciones reales de los tests, builds locales, contenedores Docker y corridas de GitHub Actions. También se comprobó manualmente el bloqueo y desbloqueo de los Pull Requests mediante los required checks.
+
