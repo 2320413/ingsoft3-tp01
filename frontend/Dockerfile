@@ -15,9 +15,17 @@ RUN npm run build
 
 
 # =========================
-# ETAPA 2: NGINX
+# ETAPA 2: TESTS
 # =========================
-FROM nginx:alpine
+FROM build AS test
+
+ENTRYPOINT ["npm", "run", "test:ci"]
+
+
+# =========================
+# ETAPA 3: NGINX
+# =========================
+FROM nginx:alpine AS final
 
 COPY --from=build /app/dist /usr/share/nginx/html
 

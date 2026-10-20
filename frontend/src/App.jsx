@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import {
+  cargarVehiculos,
+  filtrarVehiculosFavoritos,
+} from './lib/vehiculos'
 
 const imagenesVehiculos = {
   Adder: [
@@ -93,22 +97,11 @@ function App() {
 
 
   useEffect(() => {
-    const params = new URLSearchParams()
-
-    if (buscar) {
-      params.append('buscar', buscar)
-    }
-
-    if (concesionaria) {
-      params.append('concesionaria', concesionaria)
-    }
-
-    fetch(`/api/vehiculos?${params.toString()}`)
-      .then((response) => response.json())
-      .then((data) => setVehiculos(data))
-      .catch((error) =>
-        console.error('Error cargando vehículos:', error)
-      )
+  cargarVehiculos(buscar, concesionaria)
+    .then((data) => setVehiculos(data))
+    .catch((error) =>
+      console.error('Error cargando vehículos:', error)
+    )
   }, [buscar, concesionaria])
 
   const toggleFavorito = (id) => {
@@ -145,9 +138,11 @@ function App() {
     window.open(url, '_blank')
   }
 
-  const vehiculosVisibles = mostrarFavoritos
-    ? vehiculos.filter((vehiculo) => favoritos.includes(vehiculo.id))
-    : vehiculos
+  const vehiculosVisibles = filtrarVehiculosFavoritos(
+    vehiculos,
+    favoritos,
+    mostrarFavoritos
+  )
 
   // ==================================================
   // DETALLE

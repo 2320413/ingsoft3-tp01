@@ -1,5 +1,6 @@
 using LosSantosAutoMarket.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using LosSantosAutoMarket.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +21,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     )
 );
 
+builder.Services.AddScoped<IVehiculoRepository, VehiculoRepository>();
+builder.Services.AddScoped<VehiculoService>();
+
 var app = builder.Build();
 
 app.UseCors("Frontend");
@@ -30,48 +34,20 @@ app.MapGet("/health", () =>
 });
 
 app.MapGet("/api/vehiculos", async (
-    AppDbContext db,
+    VehiculoService servicio,
     string? categoria,
     string? concesionaria,
     string? buscar,
     decimal? precioMin,
     decimal? precioMax) =>
 {
-    var query = db.Vehiculos.AsQueryable();
-
-    if (!string.IsNullOrWhiteSpace(categoria))
-    {
-        query = query.Where(v =>
-            v.Categoria.ToLower() == categoria.ToLower());
-    }
-
-    if (!string.IsNullOrWhiteSpace(concesionaria))
-    {
-        query = query.Where(v =>
-            v.Concesionaria.ToLower() == concesionaria.ToLower());
-    }
-
-    if (!string.IsNullOrWhiteSpace(buscar))
-    {
-        var texto = buscar.ToLower();
-
-        query = query.Where(v =>
-            v.Nombre.ToLower().Contains(texto) ||
-            v.Marca.ToLower().Contains(texto));
-    }
-
-    if (precioMin.HasValue)
-    {
-        query = query.Where(v => v.Precio >= precioMin.Value);
-    }
-
-    if (precioMax.HasValue)
-    {
-        query = query.Where(v => v.Precio <= precioMax.Value);
-    }
-
-    var vehiculos = await query
-        .OrderBy(v => v.Precio)
+    var vehiculos = await servicio
+        .Filtrar(
+            categoria,
+            concesionaria,
+            buscar,
+            precioMin,
+            precioMax)
         .ToListAsync();
 
     return Results.Ok(vehiculos);
