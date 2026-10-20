@@ -4,6 +4,11 @@ import {
   cargarVehiculos,
   filtrarVehiculosFavoritos,
 } from './lib/vehiculos'
+import {
+  crearMensajeCompra,
+  crearMensajeVenta,
+  crearUrlWhatsApp,
+} from './lib/contacto'
 
 const imagenesVehiculos = {
   Adder: [
@@ -126,14 +131,8 @@ function App() {
   }
 
   const venderVehiculo = () => {
-    const numero = '541156535589'
-
-    const mensaje =
-      'Hola, estoy interesado en publicar un vehículo en Los Santos Auto Market.'
-
-    const url =
-      `https://wa.me/${numero}?text=` +
-      encodeURIComponent(mensaje)
+    const mensaje = crearMensajeVenta()
+    const url = crearUrlWhatsApp(mensaje)
 
     window.open(url, '_blank')
   }
@@ -258,16 +257,8 @@ function App() {
               <button
                 className="comprar"
                 onClick={() => {
-                  const numero = '541156535589'
-
-                  const mensaje =
-                    `Hola, estoy interesado en comprar el ` +
-                    `${seleccionado.marca} ${seleccionado.nombre} ` +
-                    `por $${seleccionado.precio.toLocaleString()}.`
-
-                  const url =
-                    `https://wa.me/${numero}?text=` +
-                    encodeURIComponent(mensaje)
+                  const mensaje = crearMensajeCompra(seleccionado)
+                  const url = crearUrlWhatsApp(mensaje)
 
                   window.open(url, '_blank')
                 }}
