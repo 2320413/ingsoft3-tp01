@@ -542,5 +542,161 @@ Finalmente se extendieron los Dockerfiles con una etapa `test`, manteniendo las 
 
 Se utilizó ChatGPT como herramienta de apoyo durante el TP5 para interpretar la guía, organizar la implementación paso a paso, proponer la separación de lógica testeable, preparar ejemplos de unit tests, analizar los resultados de coverage, configurar Docker y GitHub Actions y redactar la documentación.
 
+### TP6
+
+**GHCR**
+- Backend: https://github.com/2320413/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend
+- Frontend: https://github.com/2320413/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend
+
+**Evidencia de CI/CD**
+- PR con login al registry omitido: https://github.com/2320413/ingsoft3-tp01/actions/runs/39529162136
+- `main` con publicación de imágenes: https://github.com/2320413/ingsoft3-tp01/actions/runs/39535121622
+
+**QA**
+- Frontend: https://los-santos-front-qa.onrender.com
+- API: https://los-santos-api-qa.onrender.com
+
+**PROD**
+- Frontend: https://los-santos-front-prod.onrender.com
+- API: https://los-santos-api-prod.onrender.com
+
+**Release**
+- v6.0.0: https://github.com/2320413/ingsoft3-tp01/releases/tag/v6.0.0
+
+
+# TP6 - CD, environments y deployment
+
+## Publicación de imágenes
+
+Se configuró GitHub Actions para publicar imágenes de backend y frontend en GHCR usando tags asociados al SHA del commit.
+
+La publicación ocurre solamente en `push` a `main` y después de que tests, cobertura y builds hayan pasado correctamente. En Pull Requests se ejecutan las verificaciones, pero no se hace login ni push al registry.
+
+También se comprobó que ambos paquetes son públicos mediante `docker pull` sin autenticación.
+
+---
+
+## Ambientes QA y PROD
+
+Se configuraron dos ambientes separados:
+
+- QA: `los-santos-api-qa`, `los-santos-front-qa` y base Neon `app_qa`.
+- PROD: `los-santos-api-prod`, `los-santos-front-prod` y base Neon `app_prod`.
+
+Los cuatro servicios de Render tienen Auto-Deploy desactivado. Los deploys se realizan mediante Deploy Hooks desde GitHub Actions.
+
+---
+
+## Configuración externa
+
+La configuración específica de cada ambiente quedó fuera de las imágenes.
+
+El backend obtiene la conexión mediante:
+
+`ConnectionStrings__Default`
+
+El frontend usa un template dinámico de Nginx con:
+
+- `BACKEND_URL`
+- `DNS_RESOLVER`
+
+Esto permite usar la misma aplicación en QA y PROD cambiando solamente variables de entorno.
+
+Inicialmente Render falló porque Nginx apuntaba al hostname `backend`, válido en Docker Compose pero no en Render. Se resolvió utilizando configuración dinámica.
+
+---
+
+## Deploy automático a QA
+
+El job `deploy-qa` depende de `build-backend` y `build-frontend`, se ejecuta solo en `main` y utiliza el GitHub Environment `qa`.
+
+Los hooks reciben:
+
+`ref=$GITHUB_SHA`
+
+Después se ejecutan smoke tests sobre:
+
+- `/health`
+- `/api/vehiculos`
+- `/`
+
+Se agregaron reintentos porque los servicios gratuitos de Render pueden tardar en iniciar.
+
+---
+
+## Producción con aprobación manual
+
+Se creó el GitHub Environment `production` con reviewer obligatorio.
+
+El job `deploy-prod` depende de `deploy-qa`, por lo que producción solo puede continuar después de que QA esté verde y una persona apruebe el deployment.
+
+Por esto la solución implementa **Continuous Delivery** y no Continuous Deployment: QA se despliega automáticamente, pero PROD requiere aprobación humana.
+
+También se probó un rechazo real, comprobando que el cambio llegaba a QA pero PROD permanecía en la versión anterior. Luego se realizó una aprobación correcta y el cambio llegó a producción.
+
+Se agregó además:
+
+```yaml
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+```
+
+para evitar deploys simultáneos de producción.
+
+---
+
+## Limitación del smoke test
+
+Los Deploy Hooks de Render responden antes de que el nuevo build haya terminado. Por eso un smoke test podría responder contra la versión anterior.
+
+Durante el TP se verificó manualmente en Render el `Source` del deploy y se usaron cambios visibles antes de aprobar PROD.
+
+Una mejora futura sería exponer el SHA desplegado en un endpoint y compararlo con `$GITHUB_SHA`.
+
+---
+
+## Release y rollback
+
+Se creó el tag y release:
+
+`v6.0.0`
+
+apuntando al commit:
+
+`f8e147e2aaff213b8cd79f2a82645e2a0dcf21a9`
+
+Después se desplegó una versión posterior con el texto:
+
+`Featured Vehicles - New Version`
+
+y luego se realizó un rollback real a `v6.0.0` mediante los Deploy Hooks de PROD.
+
+Render volvió a mostrar `f8e147e` como `Live` en backend y frontend, y el frontend volvió a mostrar:
+
+`Featured Vehicles`
+
+El rollback completo tardó aproximadamente **38 segundos**. Render informó aproximadamente **27.4 s** para backend y **36.3 s** para frontend.
+
+El rollback de código no revierte automáticamente cambios destructivos de base de datos, por lo que en un sistema real las migraciones deberían ser compatibles entre versiones o tener un procedimiento específico de recuperación.
+
+---
+
+## Limitaciones y mejora futura
+
+Actualmente CI publica imágenes verificadas en GHCR, pero Render reconstruye el servicio desde el SHA indicado en el Deploy Hook. Esto mantiene el commit correcto, pero no garantiza que PROD use exactamente la misma imagen inmutable publicada por CI.
+
+Una mejora futura sería desplegar directamente la imagen verificada por digest.
+
+Para un sistema real con mayores requisitos elegiría un esquema **Blue/Green**, ya que permite validar una versión nueva y volver rápidamente a la anterior. A cambio, requiere más infraestructura, control de tráfico y observabilidad.
+
+---
+
+## Uso de inteligencia artificial
+
+Se utilizó ChatGPT como asistencia para interpretar la guía, revisar comandos, analizar errores de Docker, Nginx, GitHub Actions y Render, y documentar las decisiones tomadas.
+
+Todos los cambios fueron ejecutados y verificados en el proyecto antes de considerarlos válidos.
+
 Todas las propuestas fueron verificadas mediante ejecuciones reales de los tests, builds locales, contenedores Docker y corridas de GitHub Actions. También se comprobó manualmente el bloqueo y desbloqueo de los Pull Requests mediante los required checks.
 
