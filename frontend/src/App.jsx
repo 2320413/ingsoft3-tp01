@@ -412,7 +412,7 @@ function App() {
 
         <div className="titulo-seccion">
 
-          <h2>{mostrarFavoritos ? 'Tus likeados' : 'Featured Vehicles'}</h2>
+          <h2>{mostrarFavoritos ? 'Tus likeados' : 'Featured Vehicles - New Version'}</h2>
 
           <span>
             {vehiculosVisibles.length}{' '}
