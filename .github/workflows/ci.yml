@@ -204,6 +204,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy-qa
     environment: production
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
 
     steps:
       - name: Disparar deploy en Render (backend + frontend) del commit aprobado
