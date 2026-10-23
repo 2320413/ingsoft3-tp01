@@ -1190,3 +1190,40 @@ Cada cambio fue verificado mediante ejecuciones reales:
 - corrida completa en verde;
 - aprobación manual y deployment real a PROD;
 - comprobación del tag `v7.0.0` contra el commit desplegado.
+
+## TP8 — Infraestructura como Código
+
+### Riel elegido
+
+Se utilizó **Terraform + Neon + Render** para declarar un entorno nuevo `preprod`, sin modificar los ambientes existentes de QA y producción.
+
+Versiones fijadas:
+
+- Terraform: `1.17.0`
+- Provider Neon: `kislerdm/neon` `0.18.0`
+- Provider Render: `render-oss/render` `1.9.1`
+
+El entorno declarado incluye un proyecto, rol y base de datos en Neon, junto con una API y un frontend en Render ejecutando las imágenes publicadas en el TP7.
+
+El estado de Terraform se mantuvo únicamente en la máquina local y se excluyó del repositorio mediante `.gitignore`. El archivo `.terraform.lock.hcl` sí se versiona.
+
+### Problemas encontrados y soluciones
+
+Al crear inicialmente el proyecto de Neon, el provider devolvió que `org_id` era obligatorio. Se solucionó agregando al recurso `neon_project` el identificador de la organización de Neon.
+
+Al crear los servicios de Render, se utilizó inicialmente un identificador incorrecto como `RENDER_OWNER_ID`. El provider respondió `invalid ownerID`. Se consultó el endpoint `/v1/owners` de la API de Render y se utilizó el `owner.id` correcto como variable de entorno.
+
+También se comprobó:
+
+- idempotencia mediante un segundo `terraform plan` con `No changes`;
+- detección y reparación de drift eliminando manualmente la base administrada;
+- que un recurso creado manualmente y no declarado no es detectado por Terraform;
+- el ciclo completo `destroy → apply`, recreando los cinco recursos de preprod;
+- que QA y producción permanecieron intactos;
+- el funcionamiento de `prevent_destroy`, que bloqueó correctamente la destrucción de la base.
+
+### Uso de Inteligencia Artificial
+
+Se utilizó ChatGPT como asistencia para interpretar la consigna, preparar y revisar los archivos HCL, analizar errores de los providers de Neon y Render y seguir el ciclo de pruebas del práctico.
+
+Todas las propuestas fueron verificadas ejecutando realmente `terraform validate`, `plan`, `apply` y `destroy`, comprobando los recursos creados en Neon y Render y realizando requests reales contra la API de preprod.

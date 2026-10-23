@@ -19,3 +19,9 @@ Thumbs.db
 TestResults/
 coverage/
 coveragereport*/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
