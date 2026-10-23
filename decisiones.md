@@ -1,4 +1,42 @@
-# Decisiones — TP1
+# Enlaces del TP7
+
+## Packages públicos en GHCR
+
+- Backend: <https://github.com/2320413/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend>
+- Frontend: <https://github.com/2320413/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend>
+
+### QA
+
+- Frontend: <https://los-santos-front-qa.onrender.com>
+- API: <https://los-santos-api-qa.onrender.com>
+
+### PROD
+
+- Frontend: <https://los-santos-front-prod.onrender.com>
+- API: <https://los-santos-api-prod.onrender.com>
+
+### Evidencia del gate en rojo
+
+- Corrida: <https://github.com/2320413/ingsoft3-tp01/actions/runs/39892631696>
+- Commit: `a257da9b095f8864f24ddbb4ac7fbde683b8ffa2`
+- Resultado de integración: verde.
+- Resultado E2E: rojo.
+- `deploy-prod`: skipped, por lo que producción no se ejecutó.
+- Artifact de integración `playwright-report-integracion`: <https://github.com/2320413/ingsoft3-tp01/actions/runs/39892631696/artifacts/12475188711>
+- Artifact E2E `playwright-report-e2e`: <https://github.com/2320413/ingsoft3-tp01/actions/runs/39892631696/artifacts/12476055505>
+
+### Corrida verde final
+
+- Corrida: <https://github.com/2320413/ingsoft3-tp01/actions/runs/39894368868>
+- Commit desplegado en PROD: `238775fb2aa8f3b6b503db2d685b77b37fb5492a`
+- Resultado: build backend, build frontend, deploy QA, integración, E2E y deploy PROD en verde.
+
+### Release
+
+- v7.0.0: <https://github.com/2320413/ingsoft3-tp01/releases/tag/v7.0.0>
+- Commit de la release: `238775fb2aa8f3b6b503db2d685b77b37fb5492a`
+
+## Decisiones — TP1
 
 ## 1. Por qué Git no pudo resolver el conflicto solo — y qué habría tenido que pasar para que nunca apareciera
 
@@ -700,3 +738,455 @@ Todos los cambios fueron ejecutados y verificados en el proyecto antes de consid
 
 Todas las propuestas fueron verificadas mediante ejecuciones reales de los tests, builds locales, contenedores Docker y corridas de GitHub Actions. También se comprobó manualmente el bloqueo y desbloqueo de los Pull Requests mediante los required checks.
 
+## TP7 — Integración, E2E y build once deploy many
+
+## Build once, deploy many
+
+En el TP7 se modificó el mecanismo de despliegue para que QA y PROD utilicen las mismas imágenes construidas y verificadas por GitHub Actions.
+
+Para cada `push` a `main`, CI publica dos imágenes en GHCR:
+
+```text
+ghcr.io/2320413/ingsoft3-tp01-backend:sha-<commit>
+ghcr.io/2320413/ingsoft3-tp01-frontend:sha-<commit>
+```
+
+Los cuatro servicios de Render —API QA, frontend QA, API PROD y frontend PROD— fueron configurados como servicios basados en imágenes.
+
+Los Deploy Hooks reciben el parámetro `imgURL` con el tag correspondiente al SHA del commit. De esta forma Render no vuelve a construir el código fuente, sino que despliega la imagen previamente creada por CI.
+
+El flujo cumple así el principio **build once, deploy many**: una misma imagen se construye una sola vez y luego se promueve por los distintos ambientes.
+
+---
+
+## Tags de imagen
+
+Se eligió utilizar tags de la forma:
+
+```text
+sha-<commit>
+```
+
+en lugar de `latest`.
+
+Un SHA identifica de forma inequívoca el código que generó la imagen. En cambio, `latest` es mutable y puede terminar apuntando a una imagen distinta con el tiempo, lo que dificulta demostrar qué versión fue desplegada o realizar un rollback reproducible.
+
+La release `v7.0.0` apunta al commit:
+
+```text
+238775fb2aa8f3b6b503db2d685b77b37fb5492a
+```
+
+El mismo SHA identifica las imágenes publicadas en GHCR y desplegadas en producción.
+
+---
+
+## Imagen configurada y versión desplegada en Render
+
+La imagen configurada inicialmente en un servicio de Render no necesariamente representa la última versión desplegada.
+
+Los Deploy Hooks permiten enviar un nuevo `imgURL`, por lo que el servicio puede pasar a ejecutar otra imagen sin modificar manualmente su configuración base.
+
+Para verificar los despliegues se revisaron los Events de Render. Allí se observó que los despliegues fueron disparados mediante `Deploy Hook` y que backend y frontend utilizaron los tags `sha-<commit>` correspondientes.
+
+Los packages de GHCR se configuraron como públicos y también se comprobó que las imágenes podían obtenerse sin autenticación.
+
+---
+
+## Limitación de los smoke tests
+
+Un smoke test demuestra que un servicio está respondiendo, pero por sí solo no garantiza que esa respuesta corresponda exactamente a la nueva imagen que acaba de solicitarse.
+
+Los Deploy Hooks de Render son asíncronos: el hook puede responder mientras Render todavía está realizando el deployment.
+
+Por ese motivo el pipeline utiliza reintentos y espera a que QA esté disponible antes de comenzar las pruebas posteriores.
+
+Además, la identificación de la versión desplegada se verificó mediante el SHA de la imagen y los Events de Render.
+
+Esta diferencia es importante: comprobar que `/health` responde demuestra disponibilidad, mientras que comprobar el tag `sha-<commit>` permite relacionar el servicio desplegado con la imagen producida por CI.
+
+---
+
+## Tests de integración
+
+Se agregó Playwright como herramienta para las pruebas de integración y E2E.
+
+Los tests de integración se encuentran en:
+
+```text
+frontend/e2e/api.spec.js
+```
+
+Estos tests utilizan directamente el fixture `request` de Playwright y no abren un navegador.
+
+En CI se ejecutan contra:
+
+```text
+https://los-santos-api-qa.onrender.com
+```
+
+Por lo tanto prueban la API pública desplegada y la base de datos real de QA.
+
+Se implementaron tres casos.
+
+### Crear, consultar y eliminar un vehículo
+
+El test crea un vehículo con un nombre único basado en el tiempo, consulta nuevamente la API para verificar que realmente fue persistido, lo elimina y vuelve a consultar para comprobar que dejó de existir.
+
+### Validación de nombre obligatorio
+
+Se intenta crear un vehículo con `nombre` vacío.
+
+La API debe responder:
+
+```text
+400 Bad Request
+```
+
+y se verifica además que la cantidad de registros no haya aumentado.
+
+### Búsqueda de un vehículo creado
+
+El test crea un vehículo único, utiliza el parámetro `buscar` de la API y comprueba que el vehículo sea recuperado correctamente desde la base de datos.
+
+Luego elimina el registro y verifica que la misma búsqueda ya no lo devuelva.
+
+Los tests utilizan datos únicos y limpian los registros creados. También se agregó limpieza mediante `finally` para reducir la posibilidad de dejar datos residuales si ocurre un fallo durante una prueba.
+
+---
+
+## Tests E2E
+
+Los tests de navegador se encuentran en:
+
+```text
+frontend/e2e/vehiculos.spec.js
+```
+
+Se ejecutan con Chromium contra:
+
+```text
+https://los-santos-front-qa.onrender.com
+```
+
+Se eligieron tres flujos críticos de usuario.
+
+### Publicar y eliminar un vehículo
+
+El test crea una cuenta temporal, inicia sesión, publica un vehículo y comprueba que aparezca en el catálogo.
+
+Después solicita eliminarlo, verifica el modal de confirmación y confirma la eliminación.
+
+Finalmente comprueba que el vehículo desaparezca.
+
+### Validación al publicar sin nombre
+
+El test inicia sesión e intenta enviar el formulario sin completar el nombre.
+
+Se verifica el mensaje:
+
+```text
+El nombre es obligatorio.
+```
+
+y que no aparezca una publicación nueva.
+
+### Buscar una publicación propia
+
+El test publica un vehículo con nombre único, utiliza el buscador del catálogo y verifica que aparezca el vehículo correcto.
+
+Finalmente elimina la publicación para limpiar los datos utilizados durante la prueba.
+
+---
+
+## Diferencia entre integración y E2E
+
+Los tests de integración verifican principalmente la comunicación entre la API, su lógica y la base de datos real de QA.
+
+No necesitan navegador, por lo que son más rápidos y permiten diagnosticar problemas de backend o persistencia con mayor precisión.
+
+Los tests E2E atraviesan la aplicación desde la interfaz del usuario. Verifican frontend, navegación, formularios, comunicación con la API y comportamiento observable.
+
+Esto permite interpretar mejor un fallo.
+
+Por ejemplo, durante la demostración del gate:
+
+```text
+integración → verde
+E2E → rojo
+```
+
+La API y la base de datos seguían funcionando, pero existía un problema en el flujo de interfaz.
+
+---
+
+## Alcance de los tests
+
+La suite de integración cubre varios comportamientos de la API porque estas pruebas son relativamente rápidas y estables.
+
+La suite E2E se mantuvo más pequeña y enfocada en tres recorridos críticos.
+
+Agregar E2E para cada variante de comportamiento produciría una suite más lenta y más sensible a cambios visuales o de infraestructura. Por eso se prefirió utilizar integración para una cobertura más amplia de la API y E2E para pocos recorridos representativos del usuario.
+
+---
+
+## Gate de despliegue
+
+El pipeline final quedó encadenado de la siguiente manera:
+
+```text
+build-backend ─┐
+               ├─> deploy-qa
+build-frontend ┘
+                     |
+                     v
+                integracion
+                     |
+                     v
+                    e2e
+                     |
+                     v
+                deploy-prod
+```
+
+Las dependencias relevantes son:
+
+```text
+integracion needs deploy-qa
+e2e needs integracion
+deploy-prod needs e2e
+```
+
+No se utilizaron mecanismos para ocultar fallos como:
+
+```text
+continue-on-error
+|| true
+exit 0
+```
+
+Por lo tanto cualquier fallo de integración o E2E corta naturalmente la cadena.
+
+El environment `production` mantiene además un reviewer obligatorio, por lo que incluso con todo el gate en verde el despliegue final requiere aprobación manual.
+
+---
+
+## Demostración del gate en rojo
+
+Para probar el gate se modificó intencionalmente código real de la aplicación, sin modificar los tests.
+
+El texto del botón:
+
+```text
+Sell With Us
+```
+
+se cambió por:
+
+```text
+Sell Your Car
+```
+
+El backend continuó funcionando normalmente.
+
+En la corrida:
+
+<https://github.com/2320413/ingsoft3-tp01/actions/runs/39892631696>
+
+se obtuvo:
+
+```text
+build-backend  OK
+build-frontend OK
+deploy-qa      OK
+integracion    OK
+e2e            FAIL
+deploy-prod    SKIPPED
+```
+
+El commit utilizado para la demostración fue:
+
+```text
+a257da9b095f8864f24ddbb4ac7fbde683b8ffa2
+```
+
+La integración quedó verde porque los endpoints y la base de datos continuaban funcionando.
+
+El E2E quedó rojo porque el recorrido del usuario esperaba encontrar `Sell With Us` y la aplicación desplegada ya mostraba `Sell Your Car`.
+
+Como consecuencia del fallo, `deploy-prod` no se ejecutó.
+
+La corrida publicó igualmente los dos artifacts:
+
+```text
+playwright-report-integracion
+playwright-report-e2e
+```
+
+Esto permitió conservar tanto la evidencia verde de integración como el reporte y trace del fallo E2E.
+
+---
+
+## Corrección y corrida verde
+
+Luego se restauró el texto correcto del botón en el código de la aplicación, sin modificar el test.
+
+La corrida final fue:
+
+<https://github.com/2320413/ingsoft3-tp01/actions/runs/39894368868>
+
+El resultado fue:
+
+```text
+build-backend  OK
+build-frontend OK
+deploy-qa      OK
+integracion    OK
+e2e            OK
+deploy-prod    OK
+```
+
+Antes de ejecutar producción, GitHub Actions quedó esperando la aprobación manual configurada en el environment `production`.
+
+Luego de aprobar el deployment, PROD terminó correctamente.
+
+El commit desplegado fue:
+
+```text
+238775fb2aa8f3b6b503db2d685b77b37fb5492a
+```
+
+---
+
+## Release v7.0.0
+
+El tag:
+
+```text
+v7.0.0
+```
+
+se creó específicamente sobre el commit que llegó a PROD.
+
+Se verificó con:
+
+```text
+git rev-list -n 1 v7.0.0
+```
+
+obteniendo:
+
+```text
+238775fb2aa8f3b6b503db2d685b77b37fb5492a
+```
+
+La release pública se encuentra en:
+
+<https://github.com/2320413/ingsoft3-tp01/releases/tag/v7.0.0>
+
+Esto evita etiquetar accidentalmente un commit posterior de `main` que todavía no hubiera sido promovido a producción.
+
+---
+
+## Misma imagen de frontend en QA y PROD
+
+El frontend no necesita construirse nuevamente para cada ambiente.
+
+La misma imagen se utiliza en QA y PROD y obtiene la configuración externa mediante variables de entorno de Nginx.
+
+Entre ellas:
+
+```text
+BACKEND_URL
+DNS_RESOLVER
+```
+
+De esta manera la imagen del frontend permanece igual y solamente cambia el backend al que apunta según el ambiente.
+
+Esto es una aplicación del principio de separar el artefacto desplegable de la configuración específica del ambiente.
+
+---
+
+## Render Free Tier y flakiness
+
+Los servicios gratuitos de Render pueden entrar en suspensión y tardar algunos segundos en volver a responder.
+
+Esto puede generar fallos intermitentes si los tests comienzan inmediatamente después de solicitar un deployment.
+
+Para reducir este problema se agregaron reintentos a los smoke tests de QA y se espera que los servicios estén disponibles antes de continuar con las suites.
+
+Aun así, una prueba E2E contra infraestructura remota siempre puede ser más sensible a latencia, cold starts o problemas temporales de red que una prueba local.
+
+Por esa razón los E2E tienen reintentos limitados y generan traces y screenshots cuando ocurre un fallo.
+
+---
+
+## Problemas encontrados y soluciones
+
+Durante la implementación se encontraron varios problemas.
+
+### El smoke test puede observar una versión anterior
+
+Los Deploy Hooks de Render son asíncronos. Una respuesta correcta del frontend no implica necesariamente que el nuevo deployment ya haya terminado.
+
+Esto confirmó que un smoke test de disponibilidad no debe confundirse con una comprobación exacta de versión.
+
+### Primera demostración E2E no falló
+
+La aplicación contiene un botón `Sell With Us` tanto en la vista de detalle como en el catálogo.
+
+En el primer intento de la demostración se modificó solamente el botón de la vista de detalle.
+
+Los E2E comenzaban desde el catálogo, donde todavía existía un botón con el nombre original, por lo que la suite permaneció verde.
+
+Se corrigió la demostración modificando el botón utilizado realmente por el recorrido E2E. En la siguiente ejecución, integración quedó verde, E2E falló y producción fue bloqueada correctamente.
+
+### Persistencia de publicaciones propias
+
+Inicialmente los IDs de las publicaciones creadas por un usuario solamente se guardaban en estado de React.
+
+Después de refrescar la página se perdía esa información y desaparecía la opción de eliminar la publicación.
+
+Se solucionó persistiendo los IDs en `localStorage` asociados al email del usuario.
+
+### Imágenes de vehículos publicados
+
+Inicialmente todas las publicaciones nuevas recibían la imagen de Banshee como valor fijo.
+
+Se reemplazó ese comportamiento por dos campos opcionales:
+
+```text
+ImagenUrl
+ImagenDetalleUrl
+```
+
+Si no se especifica una imagen, la aplicación muestra `Sin imagen`.
+
+También se creó una migración de Entity Framework para persistir `ImagenDetalleUrl`.
+
+### Diff excesivo de App.jsx
+
+Durante las modificaciones el archivo `App.jsx` quedó reformateado casi por completo, generando un diff innecesariamente grande.
+
+Se reconstruyó el archivo partiendo de la versión existente en `main` y se reaplicaron solamente los cambios funcionales, dejando un Pull Request más legible.
+
+---
+
+## Uso de Inteligencia Artificial
+
+Se utilizó ChatGPT como asistencia durante el TP7 para interpretar la guía, organizar el trabajo paso a paso, diseñar las pruebas de integración y E2E, analizar errores, revisar el pipeline de GitHub Actions y documentar las decisiones.
+
+Las propuestas no se consideraron válidas únicamente por haber sido generadas por IA.
+
+Cada cambio fue verificado mediante ejecuciones reales:
+
+- tests de integración locales;
+- tests E2E locales;
+- builds de GitHub Actions;
+- deployments reales en QA;
+- una demostración intencional en rojo;
+- bloqueo real de producción;
+- corrección posterior;
+- corrida completa en verde;
+- aprobación manual y deployment real a PROD;
+- comprobación del tag `v7.0.0` contra el commit desplegado.
