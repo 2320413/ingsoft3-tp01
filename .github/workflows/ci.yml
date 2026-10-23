@@ -204,9 +204,113 @@ jobs:
 
           echo "QA no respondió a tiempo"
           exit 1
-  deploy-prod:
+
+  integracion:
     runs-on: ubuntu-latest
     needs: deploy-qa
+
+    steps:
+      - name: Bajar el codigo al runner
+        uses: actions/checkout@v6
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci
+
+      - name: Esperar a que la API nueva este desplegada en QA
+        shell: bash
+        env:
+          API_BASE_URL: https://los-santos-api-qa.onrender.com
+        run: |
+          READY=false
+
+          for i in $(seq 1 30); do
+            if CODE=$(curl -s \
+              -o /dev/null \
+              -w "%{http_code}" \
+              --max-time 10 \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -d '{"nombre":""}' \
+              "$API_BASE_URL/api/vehiculos"); then
+
+              if [ "$CODE" = "400" ]; then
+                echo "La API nueva de QA esta lista"
+                READY=true
+                break
+              fi
+            else
+              CODE="000"
+            fi
+
+            echo "Intento $i/30: HTTP $CODE"
+            sleep 10
+          done
+
+          if [ "$READY" != "true" ]; then
+            echo "La API nueva de QA no estuvo lista a tiempo"
+            exit 1
+          fi
+
+      - name: Tests de integracion contra QA
+        working-directory: frontend
+        env:
+          API_BASE_URL: https://los-santos-api-qa.onrender.com
+        run: npx playwright test e2e/api.spec.js
+
+      - name: Publicar reporte de integracion
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-integracion
+          path: frontend/playwright-report
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: integracion
+
+    steps:
+      - name: Bajar el codigo al runner
+        uses: actions/checkout@v6
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci
+
+      - name: Instalar Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests E2E contra QA
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: https://los-santos-front-qa.onrender.com
+        run: npx playwright test e2e/vehiculos.spec.js
+
+      - name: Publicar reporte E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-e2e
+          path: frontend/playwright-report
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: e2e
     environment: production
     concurrency:
       group: deploy-prod

@@ -40,6 +40,10 @@ namespace LosSantosAutoMarket.Api.Migrations
                     b.Property<bool>("Disponible")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("ImagenDetalleUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("ImagenUrl")
                         .IsRequired()
                         .HasColumnType("text");
