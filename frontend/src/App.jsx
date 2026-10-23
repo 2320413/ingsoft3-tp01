@@ -476,7 +476,7 @@ function App() {
             className="top-link"
             onClick={venderVehiculo}
           >
-            Sell With Us
+            Sell Your Car
           </button>
 
           <button
