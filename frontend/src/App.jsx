@@ -6,7 +6,6 @@ import {
 } from './lib/vehiculos'
 import {
   crearMensajeCompra,
-  crearMensajeVenta,
   crearUrlWhatsApp,
 } from './lib/contacto'
 
@@ -22,7 +21,7 @@ const imagenesVehiculos = {
   ],
 
   Banshee: [
-    '/autos/Southern San Andreas/Banshee/Banshee.png',
+    '/autos/Southern San Andreas/Banshee/Banshee1.png',
     '/autos/Southern San Andreas/Banshee/Banshee2.png',
   ],
 }
@@ -39,6 +38,10 @@ function App() {
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false)
   const [usuario, setUsuario] = useState(null)
   const [motivoLogin, setMotivoLogin] = useState('')
+
+  const [mostrarVenta, setMostrarVenta] = useState(false)
+  const [publicacionesPropias, setPublicacionesPropias] = useState([])
+  const [vehiculoAEliminar, setVehiculoAEliminar] = useState(null)
 
   useEffect(() => {
     const sesionGuardada = localStorage.getItem('losSantosSession')
@@ -76,6 +79,34 @@ function App() {
     }
   }, [usuario])
 
+  useEffect(() => {
+    if (!usuario?.email) {
+      setPublicacionesPropias([])
+      return
+    }
+
+    try {
+      const publicacionesGuardadas = JSON.parse(
+        localStorage.getItem(`losSantosPublicaciones:${usuario.email}`)
+      ) || []
+
+      setPublicacionesPropias(publicacionesGuardadas)
+    } catch {
+      setPublicacionesPropias([])
+    }
+  }, [usuario])
+
+  const guardarPublicacionesPropias = (nuevasPublicaciones) => {
+    setPublicacionesPropias(nuevasPublicaciones)
+
+    if (usuario?.email) {
+      localStorage.setItem(
+        `losSantosPublicaciones:${usuario.email}`,
+        JSON.stringify(nuevasPublicaciones)
+      )
+    }
+  }
+
   const iniciarSesion = (usuarioNuevo) => {
     const fechaExpiracion = new Date()
     fechaExpiracion.setMonth(fechaExpiracion.getMonth() + 3)
@@ -95,24 +126,34 @@ function App() {
     localStorage.removeItem('losSantosSession')
     setUsuario(null)
     setFavoritos([])
+    setPublicacionesPropias([])
     setMostrarFavoritos(false)
     setMostrarConfirmarLogout(false)
+    setMostrarVenta(false)
+    setVehiculoAEliminar(null)
     setSeleccionado(null)
   }
 
-
   useEffect(() => {
-  cargarVehiculos(buscar, concesionaria)
-    .then((data) => setVehiculos(data))
-    .catch((error) =>
-      console.error('Error cargando vehículos:', error)
-    )
+    cargarVehiculos(buscar, concesionaria)
+      .then((data) => setVehiculos(data))
+      .catch((error) =>
+        console.error('Error cargando vehículos:', error)
+      )
   }, [buscar, concesionaria])
 
+  const exigirLogin = (mensaje) => {
+    if (usuario) {
+      return true
+    }
+
+    setMotivoLogin(mensaje)
+    setMostrarLogin(true)
+    return false
+  }
+
   const toggleFavorito = (id) => {
-    if (!usuario) {
-      setMotivoLogin('Iniciá sesión para guardar vehículos en favoritos.')
-      setMostrarLogin(true)
+    if (!exigirLogin('Iniciá sesión para guardar vehículos en favoritos.')) {
       return
     }
 
@@ -131,10 +172,73 @@ function App() {
   }
 
   const venderVehiculo = () => {
-    const mensaje = crearMensajeVenta()
-    const url = crearUrlWhatsApp(mensaje)
+    if (!exigirLogin('Iniciá sesión para publicar un vehículo.')) {
+      return
+    }
 
-    window.open(url, '_blank')
+    setMostrarVenta(true)
+  }
+
+  const publicarVehiculo = async (datos) => {
+    if (!exigirLogin('Iniciá sesión para publicar un vehículo.')) {
+      throw new Error('Debés iniciar sesión para publicar un vehículo.')
+    }
+
+    const respuesta = await fetch('/api/vehiculos', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(datos),
+    })
+
+    if (!respuesta.ok) {
+      const error = await respuesta.json().catch(() => ({}))
+      throw new Error(error.error || 'No se pudo publicar el vehículo.')
+    }
+
+    const creado = await respuesta.json()
+
+    setVehiculos((actuales) =>
+      [...actuales, creado].sort((a, b) => a.precio - b.precio)
+    )
+
+    guardarPublicacionesPropias([
+      ...publicacionesPropias,
+      creado.id,
+    ])
+
+    return creado
+  }
+
+  const eliminarPublicacion = async (id) => {
+    if (!exigirLogin('Iniciá sesión para eliminar una publicación.')) {
+      return
+    }
+
+    if (!publicacionesPropias.includes(id)) {
+      throw new Error('No podés eliminar una publicación que no te pertenece.')
+    }
+
+    const respuesta = await fetch(`/api/vehiculos/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!respuesta.ok) {
+      throw new Error('No se pudo eliminar la publicación.')
+    }
+
+    setVehiculos((actuales) =>
+      actuales.filter((vehiculo) => vehiculo.id !== id)
+    )
+
+    guardarPublicacionesPropias(
+      publicacionesPropias.filter((vehiculoId) => vehiculoId !== id)
+    )
+
+    if (seleccionado?.id === id) {
+      setSeleccionado(null)
+    }
   }
 
   const vehiculosVisibles = filtrarVehiculosFavoritos(
@@ -148,6 +252,11 @@ function App() {
   // ==================================================
 
   if (seleccionado) {
+    const imagenDetalle =
+      seleccionado.imagenDetalleUrl ||
+      imagenesVehiculos[seleccionado.nombre]?.[1] ||
+      seleccionado.imagenUrl
+
     return (
       <div className="app">
 
@@ -210,11 +319,17 @@ function App() {
           <div className="detalle-moderno">
 
             <div className="detalle-imagen-wrapper">
-              <img
-                className="imagen-detalle"
-                src={imagenesVehiculos[seleccionado.nombre]?.[1]}
-                alt={`${seleccionado.nombre} detalle`}
-              />
+              {imagenDetalle ? (
+                <img
+                  className="imagen-detalle"
+                  src={imagenDetalle}
+                  alt={`${seleccionado.nombre} detalle`}
+                />
+              ) : (
+                <div className="sin-imagen">
+                  Sin imagen
+                </div>
+              )}
 
               <button
                 className={`favorito detalle-favorito ${
@@ -223,6 +338,7 @@ function App() {
                     : ''
                 }`}
                 onClick={() => toggleFavorito(seleccionado.id)}
+                aria-label="Favorito"
               >
                 ♥
               </button>
@@ -266,6 +382,18 @@ function App() {
                 Contactar por WhatsApp
               </button>
 
+              {usuario &&
+                publicacionesPropias.includes(seleccionado.id) && (
+                  <button
+                    type="button"
+                    className="eliminar-publicacion"
+                    aria-label={`Eliminar ${seleccionado.nombre}`}
+                    onClick={() => setVehiculoAEliminar(seleccionado)}
+                  >
+                    Eliminar publicación
+                  </button>
+                )}
+
             </div>
 
           </div>
@@ -283,10 +411,32 @@ function App() {
           />
         )}
 
+        {vehiculoAEliminar && (
+          <ConfirmDeleteModal
+            vehiculo={vehiculoAEliminar}
+            cancelar={() => setVehiculoAEliminar(null)}
+            confirmar={async () => {
+              try {
+                await eliminarPublicacion(vehiculoAEliminar.id)
+                setVehiculoAEliminar(null)
+              } catch (error) {
+                console.error(error)
+              }
+            }}
+          />
+        )}
+
         {mostrarConfirmarLogout && (
           <ConfirmLogoutModal
             cancelar={() => setMostrarConfirmarLogout(false)}
             confirmar={cerrarSesion}
+          />
+        )}
+
+        {mostrarVenta && (
+          <VentaModal
+            cerrar={() => setMostrarVenta(false)}
+            publicar={publicarVehiculo}
           />
         )}
 
@@ -440,11 +590,17 @@ function App() {
 
               <div className="imagen-wrapper">
 
-                <img
-                  className="imagen-principal"
-                  src={vehiculo.imagenUrl}
-                  alt={vehiculo.nombre}
-                />
+                {vehiculo.imagenUrl ? (
+                  <img
+                    className="imagen-principal"
+                    src={vehiculo.imagenUrl}
+                    alt={`${vehiculo.nombre} portada`}
+                  />
+                ) : (
+                  <div className="sin-imagen">
+                    Sin imagen
+                  </div>
+                )}
 
                 <button
                   className={`favorito ${
@@ -491,6 +647,18 @@ function App() {
                   Ver vehículo
                 </button>
 
+                {usuario &&
+                  publicacionesPropias.includes(vehiculo.id) && (
+                    <button
+                      type="button"
+                      className="eliminar-publicacion"
+                      aria-label={`Eliminar ${vehiculo.nombre}`}
+                      onClick={() => setVehiculoAEliminar(vehiculo)}
+                    >
+                      Eliminar publicación
+                    </button>
+                  )}
+
               </div>
 
             </article>
@@ -512,10 +680,32 @@ function App() {
         />
       )}
 
+      {vehiculoAEliminar && (
+        <ConfirmDeleteModal
+          vehiculo={vehiculoAEliminar}
+          cancelar={() => setVehiculoAEliminar(null)}
+          confirmar={async () => {
+            try {
+              await eliminarPublicacion(vehiculoAEliminar.id)
+              setVehiculoAEliminar(null)
+            } catch (error) {
+              console.error(error)
+            }
+          }}
+        />
+      )}
+
       {mostrarConfirmarLogout && (
         <ConfirmLogoutModal
           cancelar={() => setMostrarConfirmarLogout(false)}
           confirmar={cerrarSesion}
+        />
+      )}
+
+      {mostrarVenta && (
+        <VentaModal
+          cerrar={() => setMostrarVenta(false)}
+          publicar={publicarVehiculo}
         />
       )}
 
@@ -541,8 +731,8 @@ function ConfirmLogoutModal({ cancelar, confirmar }) {
         <h2>¿Cerrar sesión?</h2>
 
         <p>
-          Vas a salir de tu cuenta. Tus vehículos likeados quedarán guardados
-          para la próxima vez que inicies sesión.
+          Vas a salir de tu cuenta. Tus vehículos likeados y publicaciones
+          quedarán guardados para la próxima vez que inicies sesión.
         </p>
 
         <button
@@ -576,12 +766,12 @@ function LoginModal({ cerrar, iniciarSesion, mensajeInicial }) {
   const [password, setPassword] = useState('')
   const [mensaje, setMensaje] = useState(mensajeInicial || '')
 
-  const emailValido = (email) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const emailValido = (emailIngresado) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIngresado)
   }
 
-  const hashPassword = async (password) => {
-    const datos = new TextEncoder().encode(password)
+  const hashPassword = async (passwordIngresada) => {
+    const datos = new TextEncoder().encode(passwordIngresada)
     const hash = await crypto.subtle.digest('SHA-256', datos)
 
     return Array.from(new Uint8Array(hash))
@@ -648,7 +838,7 @@ function LoginModal({ cerrar, iniciarSesion, mensajeInicial }) {
     }
 
     const cuenta = cuentas.find(
-      (cuenta) => cuenta.email === emailNormalizado
+      (cuentaActual) => cuentaActual.email === emailNormalizado
     )
 
     if (!cuenta || cuenta.passwordHash !== passwordHash) {
@@ -682,6 +872,7 @@ function LoginModal({ cerrar, iniciarSesion, mensajeInicial }) {
         <button
           className="modal-cerrar"
           onClick={cerrar}
+          aria-label="Cerrar"
         >
           ×
         </button>
@@ -699,6 +890,7 @@ function LoginModal({ cerrar, iniciarSesion, mensajeInicial }) {
         {mensaje && (
           <div
             className="mensaje-login"
+            role="alert"
             style={{
               marginBottom: '18px',
               padding: '12px 14px',
@@ -718,19 +910,25 @@ function LoginModal({ cerrar, iniciarSesion, mensajeInicial }) {
           onSubmit={manejarSubmit}
           noValidate
         >
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <label>
+            Email
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
 
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <label>
+            Contraseña
+            <input
+              type="password"
+              placeholder="Contraseña"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
 
           <button
             type="submit"
@@ -749,6 +947,189 @@ function LoginModal({ cerrar, iniciarSesion, mensajeInicial }) {
           {registro
             ? '¿Ya tenés cuenta? Iniciar sesión'
             : '¿No tenés cuenta? Crear cuenta'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
+// ==================================================
+// MODAL PUBLICAR VEHÍCULO
+// ==================================================
+
+function VentaModal({ cerrar, publicar }) {
+  const [nombre, setNombre] = useState('')
+  const [marca, setMarca] = useState('')
+  const [categoria, setCategoria] = useState('')
+  const [concesionaria, setConcesionaria] = useState('')
+  const [precio, setPrecio] = useState('')
+  const [imagenUrl, setImagenUrl] = useState('')
+  const [imagenDetalleUrl, setImagenDetalleUrl] = useState('')
+  const [mensaje, setMensaje] = useState('')
+
+  const manejarSubmit = async (e) => {
+    e.preventDefault()
+    setMensaje('')
+
+    if (!nombre.trim()) {
+      setMensaje('El nombre es obligatorio.')
+      return
+    }
+
+    try {
+      await publicar({
+        nombre: nombre.trim(),
+        marca: marca.trim() || 'Desconocida',
+        categoria: categoria.trim() || 'Otros',
+        concesionaria: concesionaria.trim() || 'Particular',
+        precio: Number(precio) || 0,
+        imagenUrl: imagenUrl.trim(),
+        imagenDetalleUrl: imagenDetalleUrl.trim(),
+        disponible: true,
+      })
+
+      cerrar()
+    } catch (error) {
+      setMensaje(error.message)
+    }
+  }
+
+  return (
+    <div
+      className="modal-fondo"
+      onClick={cerrar}
+    >
+      <div
+        className="modal-login"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          className="modal-cerrar"
+          onClick={cerrar}
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+
+        <h2>Publicar vehículo</h2>
+
+        {mensaje && (
+          <div role="alert" className="mensaje-login">
+            {mensaje}
+          </div>
+        )}
+
+        <form onSubmit={manejarSubmit}>
+          <label>
+            Nombre del vehículo
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Marca
+            <input
+              value={marca}
+              onChange={(e) => setMarca(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Categoría
+            <input
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Concesionaria
+            <input
+              value={concesionaria}
+              onChange={(e) => setConcesionaria(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Precio
+            <input
+              type="number"
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Imagen de portada (opcional)
+            <input
+              type="url"
+              placeholder="https://ejemplo.com/auto-portada.jpg"
+              value={imagenUrl}
+              onChange={(e) => setImagenUrl(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Imagen de detalle (opcional)
+            <input
+              type="url"
+              placeholder="https://ejemplo.com/auto-detalle.jpg"
+              value={imagenDetalleUrl}
+              onChange={(e) => setImagenDetalleUrl(e.target.value)}
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="modal-submit"
+          >
+            Publicar vehículo
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+
+// ==================================================
+// CONFIRMACIÓN DE ELIMINACIÓN
+// ==================================================
+
+function ConfirmDeleteModal({ vehiculo, cancelar, confirmar }) {
+  return (
+    <div
+      className="modal-fondo"
+      onClick={cancelar}
+    >
+      <div
+        className="modal-login"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2>Eliminar vehículo</h2>
+
+        <p>
+          ¿Seguro que querés eliminar el vehículo{' '}
+          <strong>{vehiculo.nombre}</strong>?
+        </p>
+
+        <button
+          type="button"
+          className="modal-submit"
+          onClick={confirmar}
+        >
+          Sí, eliminar vehículo
+        </button>
+
+        <button
+          type="button"
+          className="cambiar-login"
+          onClick={cancelar}
+        >
+          Cancelar
         </button>
       </div>
     </div>

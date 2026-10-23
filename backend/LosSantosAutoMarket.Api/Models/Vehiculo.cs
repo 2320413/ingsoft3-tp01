@@ -16,5 +16,7 @@ public class Vehiculo
 
     public string ImagenUrl { get; set; } = string.Empty;
 
+    public string ImagenDetalleUrl { get; set; } = string.Empty;
+
     public bool Disponible { get; set; } = true;
 }

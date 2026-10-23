@@ -1,6 +1,7 @@
 using LosSantosAutoMarket.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using LosSantosAutoMarket.Api.Services;
+using LosSantosAutoMarket.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,6 +52,46 @@ app.MapGet("/api/vehiculos", async (
         .ToListAsync();
 
     return Results.Ok(vehiculos);
+});
+
+app.MapPost("/api/vehiculos", async (
+    Vehiculo vehiculo,
+    AppDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(vehiculo.Nombre))
+    {
+        return Results.BadRequest(new
+        {
+            error = "El nombre es obligatorio"
+        });
+    }
+
+    vehiculo.Id = 0;
+
+    db.Vehiculos.Add(vehiculo);
+    await db.SaveChangesAsync();
+
+    return Results.Created(
+        $"/api/vehiculos/{vehiculo.Id}",
+        vehiculo
+    );
+});
+
+app.MapDelete("/api/vehiculos/{id:int}", async (
+    int id,
+    AppDbContext db) =>
+{
+    var vehiculo = await db.Vehiculos.FindAsync(id);
+
+    if (vehiculo is null)
+    {
+        return Results.NotFound();
+    }
+
+    db.Vehiculos.Remove(vehiculo);
+    await db.SaveChangesAsync();
+
+    return Results.NoContent();
 });
 
 using (var scope = app.Services.CreateScope())
