@@ -288,7 +288,7 @@ function App() {
               className="top-link"
               onClick={venderVehiculo}
             >
-              Sell Your Car
+              Sell With Us
             </button>
 
             <button
@@ -476,7 +476,7 @@ function App() {
             className="top-link"
             onClick={venderVehiculo}
           >
-            Sell Your Car
+            Sell With Us
           </button>
 
           <button
