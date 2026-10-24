@@ -29,7 +29,7 @@ var app = builder.Build();
 
 app.UseCors("Frontend");
 
-app.MapGet("/health", () =>
+app.MapMethods("/health", new[] { "GET", "HEAD" }, () =>
 {
     return Results.Ok(new { status = "ok" });
 });
