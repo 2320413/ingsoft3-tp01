@@ -5,12 +5,6 @@ using LosSantosAutoMarket.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.UseSentry(o =>
-{
-    o.Dsn = builder.Configuration["SENTRY_DSN"] ?? "";
-    o.TracesSampleRate = 1.0;
-});
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -99,9 +93,6 @@ app.MapDelete("/api/vehiculos/{id:int}", async (
 
     return Results.NoContent();
 });
-
-app.MapGet("/api/falla", string () =>
-    throw new InvalidOperationException("Falla de prueba del TP9"));
 
 using (var scope = app.Services.CreateScope())
 {
