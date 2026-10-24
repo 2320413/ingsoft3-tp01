@@ -1227,3 +1227,170 @@ También se comprobó:
 Se utilizó ChatGPT como asistencia para interpretar la consigna, preparar y revisar los archivos HCL, analizar errores de los providers de Neon y Render y seguir el ciclo de pruebas del práctico.
 
 Todas las propuestas fueron verificadas ejecutando realmente `terraform validate`, `plan`, `apply` y `destroy`, comprobando los recursos creados en Neon y Render y realizando requests reales contra la API de preprod.
+
+## TP9 — DevSecOps + Observabilidad + Continuous Feedback
+
+### Dependabot
+
+Se configuró Dependabot para vigilar tres ecosistemas del proyecto:
+
+- NuGet para el backend.
+- npm para el frontend.
+- GitHub Actions para el pipeline.
+
+Se analizó y mergeó el PR #47 de Dependabot, que actualizó:
+
+```text
+Microsoft.AspNetCore.OpenApi
+8.0.30 → 8.0.32
+```
+
+Se decidió mergearlo porque era una actualización patch dentro de .NET 8, las notas de versión no indicaban breaking changes y los checks requeridos del pipeline terminaron correctamente.
+
+### CodeQL y seguridad del repositorio
+
+Se activó CodeQL con configuración por defecto.
+
+El primer análisis encontró cuatro findings:
+
+```text
+Workflow does not contain permissions
+```
+
+Los cuatro correspondían a jobs del workflow de CI.
+
+Se corrigieron aplicando el principio de mínimo privilegio:
+
+```text
+deploy-qa    → permissions: {}
+integracion  → contents: read
+e2e          → contents: read
+deploy-prod  → permissions: {}
+```
+
+Después de volver a ejecutar CodeQL, el resultado quedó:
+
+```text
+0 Open
+4 Closed
+```
+
+También se verificó que Secret Scanning y Push Protection estuvieran activos.
+
+### Monitoreo externo
+
+Se configuró UptimeRobot para monitorear:
+
+```text
+https://los-santos-api-prod.onrender.com/health
+```
+
+con un intervalo de 5 minutos.
+
+Inicialmente el endpoint solamente aceptaba GET y una petición HEAD devolvía:
+
+```text
+405 Method Not Allowed
+```
+
+Se modificó `/health` para aceptar:
+
+```text
+GET
+HEAD
+```
+
+y se desplegó la corrección a producción.
+
+Para comprobar las alertas se suspendió intencionalmente la API de producción.
+
+UptimeRobot detectó la caída aproximadamente 3 minutos después y registró el estado DOWN.
+
+Luego se reanudó el servicio y UptimeRobot registró nuevamente el estado UP.
+
+Al finalizar el ejercicio, el monitor se dejó pausado para evitar mantener despierto permanentemente el servicio gratuito de Render.
+
+### Sentry
+
+Se integró Sentry tanto en el backend ASP.NET Core como en el frontend React.
+
+En el backend el DSN se configuró mediante la variable de entorno:
+
+```text
+SENTRY_DSN
+```
+
+por lo que no quedó escrito en el código.
+
+En el frontend el DSN se configuró en el código de la aplicación, ya que el DSN de navegador no funciona como una credencial privada y necesariamente queda visible para el cliente.
+
+Se habilitaron Error Monitoring y Tracing.
+
+Para verificar la captura de errores se agregó temporalmente:
+
+```text
+GET /api/falla
+```
+
+que generaba:
+
+```text
+System.InvalidOperationException
+Falla de prueba del TP9
+```
+
+Sentry registró dos eventos del error.
+
+Luego de verificar la integración, el endpoint `/api/falla` fue eliminado y producción volvió a responder 404 para esa ruta.
+
+### Uso y rendimiento observado
+
+A partir de las transacciones reales registradas en Sentry se observó:
+
+```text
+Operación más usada:
+GET /api/vehiculos
+1.27 TPM
+```
+
+La operación más lenta del backend fue:
+
+```text
+POST /api/vehiculos
+P50: 1.05 s
+P95: 1.05 s
+```
+
+A partir de este dato se creó en el tablero del TP3 la tarjeta:
+
+```text
+Optimizar creación de vehículos
+```
+
+para investigar la latencia de escritura en la base de datos.
+
+### Problemas encontrados y soluciones
+
+Durante el TP se encontraron varios problemas:
+
+- `/health` devolvía 405 ante HEAD. Se modificó el endpoint para aceptar GET y HEAD.
+- CodeQL detectó cuatro jobs sin permisos explícitos. Se aplicó mínimo privilegio y los cuatro findings quedaron cerrados.
+- Una corrida antigua de `deploy-prod` estaba esperando aprobación y bloqueaba mediante `concurrency` un deployment nuevo. Se canceló la corrida vieja para liberar el grupo.
+- El backend de Sentry necesitaba mantener el DSN fuera del código. Se configuró mediante `SENTRY_DSN` en Render.
+- El endpoint de error utilizado para verificar Sentry se eliminó después de la prueba para no dejar una ruta intencionalmente rota en producción.
+
+### Uso de Inteligencia Artificial
+
+Se utilizó ChatGPT como asistencia para interpretar la guía del TP9, configurar Dependabot, analizar y corregir findings de CodeQL, preparar el monitoreo externo, integrar Sentry y revisar los resultados observados.
+
+Las sugerencias fueron verificadas mediante resultados reales:
+
+- PR de Dependabot mergeado con checks verdes;
+- ejecución real de CodeQL y cierre de cuatro findings;
+- verificación de Push Protection;
+- caída y recuperación reales detectadas por UptimeRobot;
+- requests reales contra producción;
+- error capturado por Sentry;
+- métricas reales de uso y latencia;
+- tests de backend y frontend;
+- pipeline completo y deployments reales a producción.
