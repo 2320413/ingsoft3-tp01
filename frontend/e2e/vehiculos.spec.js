@@ -128,6 +128,10 @@ async function registrarUsuario(page) {
     async ({ page }) => {
         await registrarUsuario(page)
 
+        await expect(
+            page.locator('.vehiculo-card').first()
+        ).toBeVisible()
+
         const cantidadAntes =
         await page.locator('.vehiculo-card').count()
 
