@@ -601,7 +601,6 @@ Se utilizó ChatGPT como herramienta de apoyo durante el TP5 para interpretar la
 **Release**
 - v6.0.0: https://github.com/2320413/ingsoft3-tp01/releases/tag/v6.0.0
 
-
 # TP6 - CD, environments y deployment
 
 ## Publicación de imágenes
@@ -683,6 +682,18 @@ concurrency:
 para evitar deploys simultáneos de producción.
 
 ---
+
+### Rechazo real de producción
+
+Se realizó un rechazo real del deployment de producción en la corrida:
+
+https://github.com/2320413/ingsoft3-tp01/actions/runs/39551271322
+
+El cambio `Trending - QA Gate Test` había llegado correctamente a QA, pero se rechazó la promoción a producción con el siguiente motivo:
+
+> Verifiqué que el cambio "Trending - QA Gate Test" llegó correctamente a QA. Rechazo esta promoción para comprobar que el gate humano mantiene PROD en la versión anterior mientras reviso el cambio antes de liberarlo.
+
+Como resultado, QA quedó actualizado pero PROD permaneció en la versión anterior. Esto permitió comprobar que el gate humano puede detener una promoción aunque las verificaciones automáticas anteriores hayan terminado correctamente.
 
 ## Limitación del smoke test
 
@@ -1378,6 +1389,7 @@ Durante el TP se encontraron varios problemas:
 - Una corrida antigua de `deploy-prod` estaba esperando aprobación y bloqueaba mediante `concurrency` un deployment nuevo. Se canceló la corrida vieja para liberar el grupo.
 - El backend de Sentry necesitaba mantener el DSN fuera del código. Se configuró mediante `SENTRY_DSN` en Render.
 - El endpoint de error utilizado para verificar Sentry se eliminó después de la prueba para no dejar una ruta intencionalmente rota en producción.
+- Durante la limpieza del endpoint temporal `/api/falla` se eliminó accidentalmente también la inicialización de Sentry del backend. La revisión final previa a la entrega detectó la regresión y se restauró `UseSentry` manteniendo eliminado únicamente el endpoint de prueba.
 
 ### Uso de Inteligencia Artificial
 
