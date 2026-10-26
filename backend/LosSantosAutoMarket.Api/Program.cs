@@ -5,6 +5,12 @@ using LosSantosAutoMarket.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.UseSentry(o =>
+{
+    o.Dsn = builder.Configuration["SENTRY_DSN"] ?? "";
+    o.TracesSampleRate = 1.0;
+});
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
